@@ -2,7 +2,10 @@
 name = "jobqueue-monitor"
 requires-python = ">= 3.12"
 license = {text = "Apache-2.0"}
-dependencies = []
+dependencies = [
+  "asyncssh",
+  "textual",
+]
 dynamic = ["version"]
 
 [build-system]
