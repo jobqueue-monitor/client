@@ -3,6 +3,8 @@ name = "jobqueue-monitor"
 requires-python = ">= 3.12"
 license = {text = "Apache-2.0"}
 dependencies = [
+  "rich",
+  "rich-click",
   "asyncssh",
   "textual",
 ]
@@ -11,6 +13,9 @@ dynamic = ["version"]
 [build-system]
 requires = ["setuptools>=64.0", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
+
+[project.scripts]
+jobqueue-monitor = "jobqueue_monitor.main:main"
 
 [tool.setuptools]
 packages = ["jobqueue_monitor"]
@@ -32,6 +37,8 @@ target-version = "py312"
 
 extend-include = ["*.ipynb"]
 line-length = 100
+
+fix = true
 
 [tool.ruff.lint]
 select = [
