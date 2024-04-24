@@ -1,5 +1,7 @@
 import rich_click as click
 
+from .app import JobqueueMonitor
+
 
 @click.command()
 @click.argument("server", type=str, default=None)
@@ -8,4 +10,5 @@ def main(server: str):
 
     SERVER is the SSH host name of the job queue server.
     """
-    pass
+    app = JobqueueMonitor()
+    app.run()
