@@ -14,6 +14,9 @@ dynamic = ["version"]
 requires = ["setuptools>=64.0", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
+[project.scripts]
+jobqueue-monitor = "jobqueue_monitor.main:main"
+
 [tool.setuptools]
 packages = ["jobqueue_monitor"]
 
