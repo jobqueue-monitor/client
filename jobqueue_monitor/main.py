@@ -10,5 +10,5 @@ def main(server: str):
 
     SERVER is the SSH host name of the job queue server.
     """
-    app = JobqueueMonitor()
+    app = JobqueueMonitor(server=server)
     app.run()
