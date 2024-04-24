@@ -38,6 +38,8 @@ target-version = "py312"
 extend-include = ["*.ipynb"]
 line-length = 100
 
+fix = true
+
 [tool.ruff.lint]
 select = [
     # Pyflakes
