@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from textual.app import App, ComposeResult
+from textual.binding import Binding
 from textual.widgets import Footer, Header
 
 
@@ -11,6 +12,10 @@ class Config:
 
 class JobqueueMonitor(App):
     TITLE = "jobqueue-monitor"
+
+    BINDINGS = [
+        Binding("ctrl+c", "quit", "Quit", show=True, priority=True),
+    ]
 
     def __init__(self, config: Config):
         self.config = config
