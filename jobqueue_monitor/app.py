@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from textual.app import App, ComposeResult
-from textual.widgets import Header
+from textual.widgets import Footer, Header
 
 
 @dataclass
@@ -20,3 +20,4 @@ class JobqueueMonitor(App):
 
     def compose(self) -> ComposeResult:
         yield Header()
+        yield Footer()
