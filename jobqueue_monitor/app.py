@@ -4,6 +4,8 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import Footer, Header
 
+from .screens import QueueScreen
+
 
 @dataclass
 class Config:
@@ -15,7 +17,10 @@ class JobqueueMonitor(App):
 
     BINDINGS = [
         Binding("ctrl+c", "quit", "Quit", show=True, priority=True),
+        Binding("q", "push_screen('queue')", "Queue"),
     ]
+
+    SCREENS = {"queue": QueueScreen()}
 
     def __init__(self, config: Config):
         self.config = config
