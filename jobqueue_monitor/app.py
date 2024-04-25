@@ -1,7 +1,8 @@
 from dataclasses import dataclass
 
 from textual.app import App, ComposeResult
-from textual.widgets import Header
+from textual.binding import Binding
+from textual.widgets import Footer, Header
 
 
 @dataclass
@@ -12,6 +13,10 @@ class Config:
 class JobqueueMonitor(App):
     TITLE = "jobqueue-monitor"
 
+    BINDINGS = [
+        Binding("ctrl+c", "quit", "Quit", show=True, priority=True),
+    ]
+
     def __init__(self, config: Config):
         self.config = config
         self.SUB_TITLE = f"monitor the status of the jobqueue on '{config.server}'"
@@ -20,3 +25,4 @@ class JobqueueMonitor(App):
 
     def compose(self) -> ComposeResult:
         yield Header()
+        yield Footer()
