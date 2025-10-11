@@ -1,10 +1,11 @@
 import json
 import pathlib
+import re
 
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical
+from textual.containers import Container, Horizontal, Vertical
 from textual.screen import ModalScreen, Screen
-from textual.widgets import DataTable, Footer, Header, Static
+from textual.widgets import DataTable, Footer, Header, Input, Static
 
 from jobqueue_monitor.utils import natural_sort_key, translate_json
 
@@ -25,33 +26,53 @@ def extract_row(id, data):
     return (id, attrs["queue_type"], attrs["total_jobs"], description)
 
 
+def update_queue_table(table, data):
+    rows = sorted(
+        [extract_row(id, attrs) for id, attrs in data.items()],
+        key=lambda x: natural_sort_key(x[0]),
+    )
+
+    table.clear(columns=False)
+    table.add_rows(rows)
+
+
 class QueueScreen(Screen):
     BINDINGS = [
         ("escape", "app.pop_screen", "Back"),
+        ("ctrl+g", "refresh", "Refresh"),
+        ("ctrl+k", "search", "Search queues"),
     ]
     CSS_PATH = "queue.tcss"
 
     def compose(self) -> ComposeResult:
         yield Header()
-        yield DataTable(classes="queues_table")
+        with Container(id="queues"):
+            yield Static("[i]Queues[/i]", id="queues_heading", classes="heading")
+            yield Input(
+                placeholder="Search queue",
+                type="text",
+                id="queue_search_bar",
+                select_on_focus=True,
+            )
+            yield DataTable(
+                classes="queues_table", cursor_type="row", zebra_stripes=True
+            )
         yield Footer()
+
+    def action_refresh(self):
+        table = self.query_one(DataTable)
+
+        self.refresh_data(table)
 
     def refresh_data(self, table):
         self.data = query_data(PATH)
 
-        rows = sorted(
-            [extract_row(id, attrs) for id, attrs in self.data.items()],
-            key=lambda x: natural_sort_key(x[0]),
-        )
-
-        table.clear(columns=False)
-        table.add_rows(rows)
+        update_queue_table(table, self.data)
 
     def on_mount(self) -> None:
         table = self.query_one(DataTable)
-        table.cursor_type = "row"
-        table.zebra_stripes = True
         table.add_columns("name", "type", "# jobs", "description")
+        table.focus()
 
         self.refresh_data(table)
 
@@ -62,6 +83,28 @@ class QueueScreen(Screen):
         id = row[0]
 
         self.app.push_screen(QueueDetailScreen(id=id, data=self.data[id]))
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        input_widget = self.query_one(Input)
+        table = self.query_one(DataTable)
+
+        expression_re = re.compile(input_widget.value)
+
+        new_data = {
+            key: value
+            for key, value in self.data.items()
+            if expression_re.match(key) is not None
+        }
+        update_queue_table(table, new_data)
+
+    def on_input_submitted(self):
+        table = self.query_one(DataTable)
+
+        table.focus()
+
+    def action_search(self):
+        input_widget = self.query_one(Input)
+        input_widget.focus()
 
 
 def render_permissions_table(data, **kwargs):
