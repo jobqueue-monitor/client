@@ -6,25 +6,13 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen, Screen
 from textual.widgets import DataTable, Footer, Header, Static
 
-from .utils import natural_sort_key
+from .utils import natural_sort_key, translate_json
 
 PATH = pathlib.Path(__file__).parent / "../../../dummy-server/qstat_queue.json"
 
 
 def query_data(path):
     return translate_json(json.loads(path.read_text())["Queue"])
-
-
-def translate_json(data):
-    match data:
-        case "True" | "False" as obj:
-            return bool(obj)
-        case dict() as obj:
-            return {k: translate_json(v) for k, v in obj.items()}
-        case list() as obj:
-            return [translate_json(v) for v in obj]
-        case _ as obj:
-            return obj
 
 
 def extract_row(id, data):
