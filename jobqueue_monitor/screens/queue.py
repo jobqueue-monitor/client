@@ -54,9 +54,10 @@ class QueueScreen(Screen):
                 id="queue_search_bar",
                 select_on_focus=True,
             )
-            yield DataTable(
-                classes="queues_table", cursor_type="row", zebra_stripes=True
-            )
+            with Container():
+                yield DataTable(
+                    classes="queues_table", cursor_type="row", zebra_stripes=True
+                )
         yield Footer()
 
     def action_refresh(self):
