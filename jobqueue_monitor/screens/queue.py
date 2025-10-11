@@ -6,6 +6,8 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen, Screen
 from textual.widgets import DataTable, Footer, Header, Static
 
+from .utils import natural_sort_key
+
 PATH = pathlib.Path(__file__).parent / "../../../dummy-server/qstat_queue.json"
 
 
@@ -49,7 +51,10 @@ class QueueScreen(Screen):
     def refresh_data(self, table):
         self.data = query_data(PATH)
 
-        rows = [extract_row(id, attrs) for id, attrs in self.data.items()]
+        rows = sorted(
+            [extract_row(id, attrs) for id, attrs in self.data.items()],
+            key=lambda x: natural_sort_key(x[0]),
+        )
 
         table.clear(columns=False)
         table.add_rows(rows)
