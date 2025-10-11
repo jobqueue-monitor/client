@@ -17,9 +17,6 @@ def query_data(path):
 
 
 def extract_row(id, data):
-    # attrs = data["attributes"]
-    # description = data["description"] or "(missing)"
-
     attrs = data
     description = "(missing)"
 
