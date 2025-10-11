@@ -1,7 +1,17 @@
-Screen {
+QueueScreen {
+
+}
+
+Container#queues {
+    border: solid green;
+}
+
+.heading {
+    padding: 1;
+    align: center middle;
+    content-align: center middle;
 }
 
 #queues_table {
-    width: 100%;
     height: 100%;
 }
