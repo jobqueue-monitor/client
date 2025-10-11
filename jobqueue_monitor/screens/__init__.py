@@ -1,1 +1,1 @@
-from .queue import QueueScreen  # noqa: F401
+from .queue import QueueDetailScreen, QueueScreen  # noqa: F401

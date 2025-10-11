@@ -1,0 +1,36 @@
+Screen {
+    layout: vertical;
+}
+
+#queue_name {
+    content-align: center middle;
+    align: center middle;
+}
+#queue_info {
+    height: 1fr;
+}
+
+.queue_details {
+    padding: 1;
+}
+.queue_detail_container {
+    height: 1fr;
+    border: solid green;
+    content-align: center top;
+    align: center top;
+}
+.heading {
+    padding: 1;
+    content-align: center middle;
+}
+
+#queue_info_heading {
+    content-align: center middle;
+    align: center middle;
+}
+#queue_resource_info {
+    height: 1fr;
+}
+#queue_job_summary {
+    height: 1fr;
+}

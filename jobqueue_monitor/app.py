@@ -4,7 +4,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import Footer, Header
 
-from .screens import QueueScreen
+from .screens import QueueDetailScreen, QueueScreen
 
 
 @dataclass
@@ -20,7 +20,7 @@ class JobqueueMonitor(App):
         Binding("q", "push_screen('queue')", "Queue"),
     ]
 
-    SCREENS = {"queue": QueueScreen()}
+    SCREENS = {"queue": QueueScreen, "queue_details": QueueDetailScreen}
 
     def __init__(self, config: Config):
         self.config = config
