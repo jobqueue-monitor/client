@@ -185,30 +185,16 @@ def parse_state_count(string):
     return {name.lower(): int(count) for name, count in parts}
 
 
-def render_job_summary(data):
+def render_job_summary(data, **kwargs):
     total = data["total_jobs"]
     state_count = parse_state_count(data["state_count"])
 
-    label = Static(
-        "[i]Job Summary[/i]",
-        id="queue_job_summary_heading",
-        classes="heading",
-    )
-    table = DataTable(
-        name="Job Summary",
-        id="queue_job_summary_table",
-        cursor_type="none",
-    )
+    table = DataTable(**kwargs)
     table.add_columns("kind", "count")
     rows = list(state_count.items()) + [("total", total)]
     table.add_rows(rows)
 
-    return Vertical(
-        label,
-        table,
-        classes="queue_detail_container",
-        id="queue_job_summary",
-    )
+    return table
 
 
 class QueueDetailScreen(ModalScreen):
@@ -302,5 +288,15 @@ class QueueDetailScreen(ModalScreen):
                         cursor_type="none",
                     )
 
-        yield render_job_summary(self._data)
+        with Vertical(classes="queue_detail_container", id="queue_job_summary"):
+            yield Static(
+                "[i]Job Summary[/i]", id="queue_job_summary_heading", classes="heading"
+            )
+
+            yield render_job_summary(
+                self._data,
+                name="job_summary",
+                id="queue_job_summary_table",
+                cursor_type="none",
+            )
         yield Footer()
