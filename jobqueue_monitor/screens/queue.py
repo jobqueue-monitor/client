@@ -6,7 +6,7 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen, Screen
 from textual.widgets import DataTable, Footer, Header, Static
 
-from .utils import natural_sort_key, translate_json
+from jobqueue_monitor.utils import natural_sort_key, translate_json
 
 PATH = pathlib.Path(__file__).parent / "../../../dummy-server/qstat_queue.json"
 
