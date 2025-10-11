@@ -214,11 +214,11 @@ class QueueDetailScreen(ModalScreen):
 
     def compose(self) -> ComposeResult:
         yield Header()
+
         yield Static(
             f"[b]Queue: {self._queue_id}[/b]", id="queue_name", classes="queue_details"
         )
 
-        # queue info
         with Vertical(id="queue_info", classes="queue_detail_container"):
             yield Static(
                 "[i]Queue Info[/i]", id="queue_info_heading", classes="heading"
@@ -299,4 +299,5 @@ class QueueDetailScreen(ModalScreen):
                 id="queue_job_summary_table",
                 cursor_type="none",
             )
+
         yield Footer()
