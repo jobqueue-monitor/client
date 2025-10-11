@@ -165,22 +165,6 @@ def preprocess_resource_table(data):
 
 
 def render_resource_table(data, **kwargs):
-    if data:
-        translated = preprocess_resource_table(data)
-        rows = list(translated.items())
-        disabled = False
-    else:
-        rows = []
-        disabled = True
-
-    table = DataTable(disabled=disabled, **kwargs)
-    table.add_columns("resource", "value")
-    table.add_rows(rows)
-
-    return table
-
-
-def render_resource_limits(data, **kwargs):
     def preprocess_group_key(key):
         return key.removeprefix("resources").lstrip("_")
 
@@ -193,10 +177,16 @@ def render_resource_limits(data, **kwargs):
         "place",
         "select",
     ]
+    group_names = [
+        "resources_assigned",
+        "resources_min",
+        "resources_max",
+        "resources_default",
+    ]
     resource_limits = {
         key: {
             preprocess_group_key(group): data.get(group, {}).get(key, "(unset)")
-            for group in ["resources_min", "resources_max", "resources_default"]
+            for group in group_names
         }
         for key in expected_keys
     }
@@ -215,7 +205,7 @@ def render_resource_limits(data, **kwargs):
         disabled = True
 
     table = DataTable(disabled=disabled, **kwargs)
-    table.add_columns("resource", "min", "max", "default")
+    table.add_columns("resource", *[k.removeprefix("resources_") for k in group_names])
     table.add_rows(rows)
 
     return table
@@ -298,36 +288,13 @@ class QueueDetailScreen(ModalScreen):
                 "[i]Resources[/i]", id="queue_resource_heading", classes="heading"
             )
 
-            with Horizontal(id="resources"):
-                with Vertical(id="assigned_resources", classes="queue_details"):
-                    yield Static(
-                        "[i]Assigned resources[/i]",
-                        id="queue_resource_available_heading",
-                        classes="heading",
-                    )
-
-                    yield render_resource_table(
-                        self._data.get("resources_assigned", {}),
-                        name="assigned_resources",
-                        zebra_stripes=True,
-                        id="queue_resource_assigned_table",
-                        cursor_type="none",
-                    )
-
-                with Vertical(id="resource_limits", classes="queue_details"):
-                    yield Static(
-                        "[i]Resource limits[/i]",
-                        id="queue_resource_limits_heading",
-                        classes="heading",
-                    )
-
-                    yield render_resource_limits(
-                        self._data,
-                        name="resource_limits",
-                        zebra_stripes=True,
-                        id="queue_resource_assigned_table",
-                        cursor_type="none",
-                    )
+            yield render_resource_table(
+                self._data,
+                name="resources",
+                zebra_stripes=True,
+                id="queue_resource_table",
+                cursor_type="none",
+            )
 
         with Vertical(classes="queue_detail_container", id="queue_job_summary"):
             yield Static(
