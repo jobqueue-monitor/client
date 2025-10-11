@@ -1,7 +1,7 @@
 [project]
 name = "jobqueue-monitor"
 requires-python = ">= 3.12"
-license = {text = "Apache-2.0"}
+license = { text = "Apache-2.0" }
 dependencies = [
   "rich",
   "rich-click",
@@ -26,12 +26,12 @@ fallback_version = "9999"
 [tool.ruff]
 builtins = ["ellipsis"]
 exclude = [
-    ".git",
-    ".eggs",
-    "build",
-    "dist",
-    "__pycache__",
-    "docs",
+  ".git",
+  ".eggs",
+  "build",
+  "dist",
+  "__pycache__",
+  "docs",
 ]
 target-version = "py312"
 
@@ -42,28 +42,21 @@ fix = true
 
 [tool.ruff.lint]
 select = [
-    # Pyflakes
-    "F",
-    # Pycodestyle
-    "E",
-    # isort
-    "I",
-    # Pyupgrade
-    "UP",
-    # tidy imports
-    "TID",
+  "F",   # Pyflakes
+  "E",   # Pycodestyle
+  "I",   # isort
+  "UP",  # Pyupgrade
+  "TID", # tidy imports
 ]
-# E402: module level import not at top of file
-# E501: line too long - let black worry about that
-# E731: do not assign a lambda expression, use a def
+
 ignore = [
-    "E402",
-    "E501",
-    "E731",
+  "E402", # module level import not at top of file
+  "E501", # line too long - let black worry about that
+  "E731", # do not assign a lambda expression, use a def
 ]
 fixable = ["I"]
 extend-safe-fixes = [
-    "TID252",  # absolute imports
+  "TID252", # absolute imports
 ]
 
 
