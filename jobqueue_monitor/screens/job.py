@@ -5,7 +5,7 @@ import re
 from textual.app import ComposeResult
 from textual.containers import Container
 from textual.screen import ModalScreen, Screen
-from textual.widgets import DataTable, Footer, Header, Input, Static
+from textual.widgets import DataTable, Footer, Header, Input, Label, Placeholder
 
 from jobqueue_monitor.utils import natural_sort_key, translate_json
 
@@ -77,7 +77,7 @@ class JobScreen(Screen):
     def compose(self) -> ComposeResult:
         yield Header()
         with Container(id="jobs"):
-            yield Static("[i]Jobs[/i]", id="jobs_heading", classes="heading")
+            yield Label("[i]Jobs[/i]", id="jobs_heading", classes="heading")
             yield Input(
                 placeholder="Search jobs",
                 type="text",
@@ -138,6 +138,7 @@ class JobScreen(Screen):
 
 class JobDetailScreen(ModalScreen):
     BINDINGS = [("escape", "app.pop_screen", "Back")]
+    CSS_PATH = "job_details.tcss"
 
     def __init__(self, id, data):
         self._job_id = id
@@ -148,9 +149,15 @@ class JobDetailScreen(ModalScreen):
     def compose(self) -> ComposeResult:
         yield Header()
 
-        yield Static(
-            f"[b]Job: {self._job_id}[/b]", id="job_heading", classes="job_details"
-        )
+        yield Label(f"[b]Job: {self._job_id}[/b]", id="job_heading", classes="heading")
+
+        with Container(classes="job_details", id="job_details"):
+            yield Label(
+                "[i]Job details[/i]", id="job_details_heading", classes="heading"
+            )
+
+            yield Placeholder("job details", classes="job_detail")
+            yield Placeholder("resources reserved / used", classes="job_detail")
 
         # details:
         # - name, owner, project
