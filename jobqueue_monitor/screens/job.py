@@ -4,7 +4,7 @@ import re
 
 from textual.app import ComposeResult
 from textual.containers import Container
-from textual.screen import Screen
+from textual.screen import ModalScreen, Screen
 from textual.widgets import DataTable, Footer, Header, Input, Static
 
 from jobqueue_monitor.utils import natural_sort_key, translate_json
@@ -126,3 +126,37 @@ class JobScreen(Screen):
         search_bar = self.query_one(Input)
 
         search_bar.focus()
+
+
+class JobDetailScreen(ModalScreen):
+    BINDINGS = [("escape", "app.pop_screen", "Back")]
+
+    def __init__(self, id, data):
+        self._job_id = id
+        self._data = data
+
+        super().__init__()
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+
+        yield Static(
+            f"[b]Job: {self._job_id}[/b]", id="job_heading", classes="job_details"
+        )
+
+        # details:
+        # - name, owner, project
+        # - server, queue, vnode
+        # - job_state, exit status, comment
+        # - final log paths (error, output), if running: log paths on the node
+        # - create / queue / finish time
+        # - requested / used resources (including eligible time)
+        # - properties:
+        #   - priority
+        #   - rerunnable
+        #   - run_count
+        #   - submit arguments
+        #   - hold types / join path / keep files / mail points
+        #   - checkpoint
+
+        yield Footer()
