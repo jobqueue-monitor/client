@@ -104,6 +104,14 @@ class JobScreen(Screen):
 
         self.action_refresh()
 
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        table = self.query_one(DataTable)
+
+        row = table.get_row_at(event.cursor_row)
+        id = row[0]
+
+        self.app.push_screen(JobDetailScreen(id=id, data=self.data[id]))
+
     def on_input_changed(self, event: Input.Changed) -> None:
         search_bar = self.query_one(Input)
         table = self.query_one(DataTable)
