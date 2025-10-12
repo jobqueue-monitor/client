@@ -31,6 +31,9 @@ Screen {
 #queue_resource_info {
     height: 1fr;
 }
+Vertical#resource_limits {
+    width: 100%;
+}
 #queue_job_summary {
     height: 1fr;
 }
