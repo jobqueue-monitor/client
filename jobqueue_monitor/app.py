@@ -10,6 +10,8 @@ from .screens import QueueDetailScreen, QueueScreen
 @dataclass
 class Config:
     server: str | None = None
+    remote_port: int = 11203
+    local_port: int = 11203
 
 
 class JobqueueMonitor(App):
