@@ -67,7 +67,7 @@ class JobqueueMonitor(App):
 
     @work(exclusive=True, group="launch-server", description="launch the server")
     async def _launch_server(self) -> None:
-        server_executable = search_executable(
+        server_executable = await search_executable(
             self._connection,
             "jobqueue-monitor-server",
         )
