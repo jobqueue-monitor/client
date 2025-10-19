@@ -5,8 +5,9 @@ import asyncssh
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
+from textual.containers import Vertical
 from textual.message import Message
-from textual.widgets import Footer, Header
+from textual.widgets import DataTable, Footer, Header, Label
 
 from .screens import QueueDetailScreen, QueueScreen
 
@@ -15,6 +16,10 @@ class SSHConnected(Message):
     def __init__(self, connection):
         super().__init__()
         self.connection = connection
+
+
+class ServerStarted(Message):
+    pass
 
 
 async def search_executable(con, executable):
@@ -42,6 +47,7 @@ class JobqueueMonitor(App):
     ]
 
     SCREENS = {"queue": QueueScreen, "queue_details": QueueDetailScreen}
+    CSS_PATH = "jobqueue_monitor.tcss"
 
     def __init__(self, config: Config):
         self.config = config
@@ -53,10 +59,29 @@ class JobqueueMonitor(App):
 
     def compose(self) -> ComposeResult:
         yield Header()
+
+        with Vertical(classes="welcome", id="welcome"):
+            yield Label(f"PBS server at: {self.config.server}", classes="welcome")
+
+            yield DataTable(
+                id="server_table",
+                cursor_type="none",
+                zebra_stripes=True,
+                classes="welcome",
+            )
+
         yield Footer()
 
     @work(exclusive=True, group="connect", description="connecting to ssh server")
     async def _connect(self) -> None:
+        server_table = self.query_one(DataTable)
+        server_table.add_rows(
+            [
+                ("alias", self.config.server),
+                ("local port", self.config.local_port),
+                ("remote port", self.config.remote_port),
+            ]
+        )
         connection = await asyncssh.connect(self.config.server)
 
         self.post_message(SSHConnected(connection=connection))
@@ -65,7 +90,7 @@ class JobqueueMonitor(App):
     def launch_server(self, message: SSHConnected) -> None:
         self._connection = message.connection
 
-        self.server_worker = self._launch_server()
+        self._launch_server()
 
     @work(exclusive=True, group="launch-server", description="launch the server")
     async def _launch_server(self) -> None:
@@ -81,10 +106,23 @@ class JobqueueMonitor(App):
                 "localhost",
                 self.config.remote_port,
             )
+            self.post_message(ServerStarted())
+
             # run indefinitely
             await asyncio.gather(proc.wait(), listener.wait_closed())
 
+    @on(ServerStarted)
+    def enable_table(self):
+        welcome = self.query_one(Vertical)
+        welcome.loading = False
+
     def on_mount(self):
+        server_table = self.query_one(DataTable)
+        server_table.add_columns("name", "value")
+
+        welcome = self.query_one(Vertical)
+        welcome.loading = True
+
         self._connect()
 
     def on_quit(self):
