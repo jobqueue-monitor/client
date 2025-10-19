@@ -18,10 +18,10 @@ class SSHConnected(Message):
 
 
 async def search_executable(con, executable):
-    command = f"bash -c 'which {executable}'"
-    result = await con.run(command)
+    result = await con.run("bash -c 'echo $HOME'")
+    home = result.stdout.strip()
 
-    return result
+    return f"{home}/.cargo/bin/{executable}"
 
 
 @dataclass
@@ -29,6 +29,8 @@ class Config:
     server: str | None = None
     remote_port: int = 11203
     local_port: int = 11203
+
+    server_executable: str | None = None
 
 
 class JobqueueMonitor(App):
@@ -67,7 +69,7 @@ class JobqueueMonitor(App):
 
     @work(exclusive=True, group="launch-server", description="launch the server")
     async def _launch_server(self) -> None:
-        server_executable = await search_executable(
+        server_executable = self.config.server_executable or await search_executable(
             self._connection,
             "jobqueue-monitor-server",
         )
