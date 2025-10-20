@@ -1,0 +1,24 @@
+LogScreen {
+    align: center middle;
+    content-align: center middle;
+}
+EnvironmentScreen {
+    align: center middle;
+}
+
+#content {
+    border: thick $background 80%;
+    background: $surface;
+    align: center middle;
+    content-align: center middle;
+}
+
+.heading {
+    padding: 1;
+    align: center middle;
+}
+
+Button {
+    content-align: center middle;
+    align: center middle;
+}

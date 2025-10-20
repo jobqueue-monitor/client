@@ -1,0 +1,40 @@
+Container.details {
+    border: solid green;
+    layout: vertical;
+}
+
+.heading {
+    padding: 1;
+    align: center middle;
+    content-align: center middle;
+}
+
+DataTable {}
+
+Container#job_details {
+    width: 4fr;
+}
+
+Container#properties {
+    width: 1fr;
+}
+
+Container#additional {
+    width: auto;
+    padding: 1;
+}
+
+Container#execution {
+    layout: horizontal;
+}
+Container#buttons {
+    layout: vertical;
+    width: auto;
+    padding: 1;
+    content-align: center middle;
+}
+
+Button {
+    margin-top: 1;
+    margin-bottom: 1;
+}

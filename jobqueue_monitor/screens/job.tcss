@@ -1,0 +1,12 @@
+.heading {
+    padding: 1;
+    content-align: center middle;
+}
+
+Container#jobs {
+    border: solid green;
+}
+
+#jobs_table {
+    height: 100%;
+}
