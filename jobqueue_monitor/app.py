@@ -11,7 +11,7 @@ from textual.message import Message
 from textual.widgets import DataTable, Footer, Header, Label
 
 from .query import shutdown
-from .screens import QueueDetailScreen, QueueScreen
+from .screens import JobScreen, QueueDetailScreen, QueueScreen
 
 
 async def cleanup(local_port):
@@ -53,9 +53,14 @@ class JobqueueMonitor(App):
     BINDINGS = [
         Binding("ctrl+c", "quit", "Quit", show=True, priority=True),
         Binding("q", "push_screen('queue')", "Queue"),
+        Binding("j", "push_screen('job')", "Job"),
     ]
 
-    SCREENS = {"queue": QueueScreen, "queue_details": QueueDetailScreen}
+    SCREENS = {
+        "queue": QueueScreen,
+        "queue_details": QueueDetailScreen,
+        "job": JobScreen,
+    }
     CSS_PATH = "jobqueue_monitor.tcss"
 
     def __init__(self, config: Config):
