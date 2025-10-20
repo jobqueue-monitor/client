@@ -3,9 +3,9 @@ import pathlib
 import re
 
 from textual.app import ComposeResult
-from textual.containers import Container
+from textual.containers import Container, Horizontal
 from textual.screen import ModalScreen, Screen
-from textual.widgets import DataTable, Footer, Header, Input, Label, Placeholder
+from textual.widgets import Button, DataTable, Footer, Header, Input, Label
 
 from jobqueue_monitor.utils import natural_sort_key, translate_json
 
@@ -136,13 +136,151 @@ class JobScreen(Screen):
         search_bar.focus()
 
 
+job_translations = {
+    "ctime": "creation time",
+    "qtime": "queue time",
+    "stime": "start time",
+    "mtime": "last modification",
+}
+
+
+def update_job_details(table, data):
+    keys = [
+        "job_name",
+        "job_owner",
+        "project",
+        "session_id",
+        "queue",
+        "server",
+        "submit_arguments",
+        "error_path",
+        "output_path",
+    ]
+
+    rows = [(k, data.get(k, "(missing)")) for k in keys]
+
+    table.add_rows(rows)
+
+
+def update_properties(table, data):
+    keys = [
+        "priority",
+        "rerunnable",
+        "run_count",
+        "checkpoint",
+        "substate",
+        "pset",
+        "hold_types",
+        "join_path",
+        "keep_files",
+        "mail_points",
+    ]
+
+    rows = [(k, data.get(k, "(missing)")) for k in keys]
+
+    table.add_rows(rows)
+
+
+def update_timestamps(table, data):
+    keys = [
+        "ctime",
+        "etime",
+        "qtime",
+        "stime",
+        "mtime",
+    ]
+
+    rows = [(job_translations.get(k, k), data.get(k, "(missing)")) for k in keys]
+
+    table.add_rows(rows)
+
+
+def identity(k, v):
+    return k, v
+
+
+def update_execution(table, data):
+    translator = {
+        "job_state": lambda k, v: (k, job_states.get(v, v)),
+    }
+
+    keys = [
+        "queue",
+        "job_state",
+        "exec_host",
+        "exec_vnode",
+        "jobdir",
+        "comment",
+    ]
+
+    rows = [translator.get(k, identity)(k, data.get(k, "(missing)")) for k in keys]
+
+    table.add_rows(rows)
+
+
+def preprocess_resource_table(data):
+    translations = {
+        "memory": "mem",
+        "# MPI processes": "mpiprocs",
+        "# cpus": "ncpus",
+        "# nodes": "nodect",
+        "select": "select",
+        "walltime": "walltime",
+        "place": "place",
+    }
+
+    return {
+        key: data.get(data_key, "(unset)") for key, data_key in translations.items()
+    }
+
+
+def update_resources(table, data):
+    def preprocess_group_key(key):
+        return key.removeprefix("resources").lstrip("_")
+
+    expected_keys = [
+        "mem",
+        "ncpus",
+        "nodect",
+        "walltime",
+        "mpiprocs",
+        "place",
+        "select",
+    ]
+
+    group_names = [
+        "resource_list",
+        "resources_used",
+    ]
+    resources = {
+        key: {
+            preprocess_group_key(group): data.get(group, {}).get(key, "(none)")
+            for group in group_names
+        }
+        for key in expected_keys
+    }
+    translated = preprocess_resource_table(resources)
+    rows = [
+        (resource,) + tuple(group.values()) for resource, group in translated.items()
+    ]
+    table.add_rows(rows)
+
+
 class JobDetailScreen(ModalScreen):
-    BINDINGS = [("escape", "app.pop_screen", "Back")]
+    BINDINGS = [
+        ("escape", "app.pop_screen", "Back"),
+        ("g", "refresh", "Refresh"),
+    ]
     CSS_PATH = "job_details.tcss"
 
     def __init__(self, id, data):
+        translations = {
+            "rerunable": "rerunnable",
+        }
         self._job_id = id
-        self._data = data
+        self._data = {
+            translations.get(k.lower(), k.lower()): v for k, v in data.items()
+        }
 
         super().__init__()
 
@@ -150,14 +288,6 @@ class JobDetailScreen(ModalScreen):
         yield Header()
 
         yield Label(f"[b]Job: {self._job_id}[/b]", id="job_heading", classes="heading")
-
-        with Container(classes="job_details", id="job_details"):
-            yield Label(
-                "[i]Job details[/i]", id="job_details_heading", classes="heading"
-            )
-
-            yield Placeholder("job details", classes="job_detail")
-            yield Placeholder("resources reserved / used", classes="job_detail")
 
         # details:
         # - name, owner, project
@@ -174,4 +304,81 @@ class JobDetailScreen(ModalScreen):
         #   - hold types / join path / keep files / mail points
         #   - checkpoint
 
+        with Horizontal():
+            with Container(classes="details", id="job_details"):
+                yield Label(
+                    "[i]Job details[/i]", id="details_heading", classes="heading"
+                )
+                yield DataTable(id="details", cursor_type="none")
+
+            with Container(classes="details", id="properties"):
+                yield Label(
+                    "[i]Job properties[/i]", id="properties_heading", classes="heading"
+                )
+                yield DataTable(id="properties", zebra_stripes=True, cursor_type="none")
+
+        with Horizontal():
+            with Container(classes="details", id="execution"):
+                with Container(id="execution_details"):
+                    yield Label(
+                        "[i]Execution environment[/i]",
+                        classes="heading",
+                        id="execution_heading",
+                    )
+                    yield DataTable(
+                        id="execution", zebra_stripes=True, cursor_type="none"
+                    )
+
+                with Container(id="buttons"):
+                    yield Button("environment", id="environment")
+                    yield Button("logs", id="logs")
+
+            with Container(classes="details", id="timestamps"):
+                yield Label(
+                    "[i]Timestamps[/i]", id="timestamps_heading", classes="heading"
+                )
+                yield DataTable(id="timestamps", cursor_type="none")
+
+        with Container(classes="details", id="resources"):
+            yield Label("[i]Resources[/i]", id="resources_heading", classes="heading")
+
+            yield DataTable(id="resources", zebra_stripes=True, cursor_type="none")
+
         yield Footer()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        print("button:", event.button)
+
+    def refresh_data(self) -> None:
+        job_details = self.query_one("DataTable#details")
+        update_job_details(job_details, self._data)
+
+        properties = self.query_one("DataTable#properties")
+        update_properties(properties, self._data)
+
+        timestamps = self.query_one("DataTable#timestamps")
+        update_timestamps(timestamps, self._data)
+
+        execution = self.query_one("DataTable#execution")
+        update_execution(execution, self._data)
+
+        resources = self.query_one("DataTable#resources")
+        update_resources(resources, self._data)
+
+    def on_mount(self) -> None:
+        job_details = self.query_one("DataTable#details")
+        job_details.add_columns("name", "value")
+
+        properties = self.query_one("DataTable#properties")
+        properties.add_columns("name", "value")
+
+        timestamps = self.query_one("DataTable#timestamps")
+        timestamps.add_columns("name", "value")
+
+        execution = self.query_one("DataTable#execution")
+        execution.add_columns("name", "value")
+
+        resources = self.query_one("DataTable#resources")
+        resources.add_columns("name", "requested", "used")
+
+        self.refresh_data()
