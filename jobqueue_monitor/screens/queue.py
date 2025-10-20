@@ -1,24 +1,26 @@
-import json
-import pathlib
 import re
 
+from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical
+from textual.message import Message
 from textual.screen import ModalScreen, Screen
 from textual.widgets import DataTable, Footer, Header, Input, Static
 
-from jobqueue_monitor.utils import natural_sort_key, translate_json
+from jobqueue_monitor.query import query
+from jobqueue_monitor.utils import natural_sort_key
 
-PATH = pathlib.Path(__file__).parent / "../../../dummy-server/qstat_queue.json"
 
+class QueueQueryResult(Message):
+    def __init__(self, data):
+        super().__init__()
 
-def query_data(path):
-    return translate_json(json.loads(path.read_text())["Queue"])
+        self.data = data
 
 
 def extract_row(id, data):
-    attrs = data
-    description = "(missing)"
+    attrs = data["attributes"]
+    description = data["description"] or "(missing)"
 
     return (id, attrs["queue_type"], attrs["total_jobs"], description)
 
@@ -58,21 +60,33 @@ class QueueScreen(Screen):
         yield Footer()
 
     def action_refresh(self):
+        self.refresh_queue_table()
+
+    @work(exclusive=True, group="query-queue", description="query the queues")
+    async def refresh_queue_table(self) -> None:
+        from textual.app import App
+
+        app = self.query_ancestor(App)
+        data = await query(app.config.local_port, kind="queue")
+
+        self.post_message(QueueQueryResult(data=data))
+
+    @on(QueueQueryResult)
+    def refresh_data(self, message: QueueQueryResult):
+        self.data = message.data
+
         table = self.query_one(DataTable)
-
-        self.refresh_data(table)
-
-    def refresh_data(self, table):
-        self.data = query_data(PATH)
-
         update_queue_table(table, self.data)
+        table.loading = False
+        table.focus()
 
     def on_mount(self) -> None:
         table = self.query_one(DataTable)
         table.add_columns("name", "type", "# jobs", "description")
+        table.loading = True
         table.focus()
 
-        self.refresh_data(table)
+        self.refresh_queue_table()
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         table = self.query_one(DataTable)
@@ -97,7 +111,6 @@ class QueueScreen(Screen):
 
     def on_input_submitted(self):
         table = self.query_one(DataTable)
-
         table.focus()
 
     def action_search(self):
@@ -264,7 +277,7 @@ class QueueDetailScreen(ModalScreen):
                     )
 
                     yield render_settings_table(
-                        self._data,
+                        self._data["attributes"],
                         zebra_stripes=True,
                         id="queue_settings_table",
                         cursor_type="none",
@@ -289,7 +302,7 @@ class QueueDetailScreen(ModalScreen):
             )
 
             yield render_resource_table(
-                self._data,
+                self._data["attributes"],
                 name="resources",
                 zebra_stripes=True,
                 id="queue_resource_table",
@@ -302,7 +315,7 @@ class QueueDetailScreen(ModalScreen):
             )
 
             yield render_job_summary(
-                self._data,
+                self._data["attributes"],
                 name="job_summary",
                 id="queue_job_summary_table",
                 cursor_type="none",
