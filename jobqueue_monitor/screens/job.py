@@ -270,6 +270,8 @@ class JobDetailScreen(ModalScreen):
     BINDINGS = [
         ("escape", "app.pop_screen", "Back"),
         ("g", "refresh", "Refresh"),
+        ("e", "environment", "Environment"),
+        ("l", "logs", "Logs"),
     ]
     CSS_PATH = "job_details.tcss"
 
@@ -347,7 +349,19 @@ class JobDetailScreen(ModalScreen):
         yield Footer()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        print("button:", event.button)
+        screens = {
+            "environment": EnvironmentScreen,
+            "logs": LogScreen,
+        }
+        screen_cls = screens[event.button.id]
+
+        self.app.push_screen(screen_cls(self._data))
+
+    def action_environment(self) -> None:
+        self.app.push_screen(EnvironmentScreen(self._data))
+
+    def action_logs(self) -> None:
+        self.app.push_screen(LogScreen(self._data))
 
     def refresh_data(self) -> None:
         job_details = self.query_one("DataTable#details")
@@ -382,3 +396,62 @@ class JobDetailScreen(ModalScreen):
         resources.add_columns("name", "requested", "used")
 
         self.refresh_data()
+
+
+class EnvironmentScreen(ModalScreen):
+    BINDINGS = [("escape", "app.pop_screen", "Back")]
+    CSS_PATH = "job_modal.tcss"
+
+    def __init__(self, data):
+        super().__init__()
+
+        self._data = data
+
+    def compose(self) -> ComposeResult:
+        with Container(id="content"):
+            yield Label("[i]Environment variables[/i]", classes="heading")
+
+            yield DataTable(id="environment", cursor_type="none", zebra_stripes=True)
+
+            yield Button("Quit")
+
+    def on_mount(self):
+        table = self.query_one("DataTable#environment")
+        table.add_columns("name", "value")
+
+        variables = self._data["variable_list"]
+        rows = [(name, value) for name, value in variables.items()]
+        table.add_rows(rows)
+
+    def on_button_pressed(self, event: Button.Pressed):
+        self.app.pop_screen()
+
+
+class LogScreen(ModalScreen):
+    BINDINGS = [("escape", "app.pop_screen", "Back")]
+    CSS_PATH = "job_modal.tcss"
+
+    def __init__(self, data):
+        super().__init__()
+
+        self._data = data
+
+    def compose(self) -> ComposeResult:
+        from textual.widgets import Placeholder
+
+        yield Label("[i]Log files[/i]", classes="heading")
+        with Horizontal(id="content"):
+            with Container(id="output"):
+                yield Label("[i]standard output[/i]", classes="heading")
+
+                yield Placeholder("stdout")
+
+            with Container(id="error"):
+                yield Label("[i]standard error[/i]", classes="heading")
+
+                yield Placeholder("stderr")
+
+        yield Button("Quit")
+
+    def on_button_pressed(self, event: Button.Pressed):
+        self.app.pop_screen()
