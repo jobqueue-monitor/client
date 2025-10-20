@@ -1,19 +1,22 @@
-import json
-import pathlib
+import datetime as dt
 import re
 
+from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal
+from textual.message import Message
 from textual.screen import ModalScreen, Screen
 from textual.widgets import Button, DataTable, Footer, Header, Input, Label
 
-from jobqueue_monitor.utils import natural_sort_key, translate_json
+from jobqueue_monitor.query import query
+from jobqueue_monitor.utils import natural_sort_key
 
-path = pathlib.Path(__file__).parent / "../../../dummy-server/qstat_job.json"
 
+class JobQueryResult(Message):
+    def __init__(self, data):
+        super().__init__()
 
-def query_data(path):
-    return translate_json(json.loads(path.read_text()))["Jobs"]
+        self.data = data
 
 
 job_states = {
@@ -44,14 +47,16 @@ def deep_match(expr, value):
             return expr.match(str(obj)) is not None
 
 
-def extract_row(id, attrs):
+def extract_row(id, data):
+    attrs = {k.lower(): v for k, v in data["attributes"].items()}
+
     job_state = attrs["job_state"]
     return (
         id,
         attrs["queue"],
         job_states.get(job_state, job_state),
-        attrs["Job_Name"],
-        attrs["Job_Owner"],
+        attrs["job_name"],
+        attrs["job_owner"],
         attrs.get("resources_used", {}).get("walltime", "(not running)"),
     )
 
@@ -87,22 +92,37 @@ class JobScreen(Screen):
 
             with Container():
                 yield DataTable(
-                    classes="jobs_table", cursor_type="row", zebra_stripes=True
+                    classes="jobs_table",
+                    cursor_type="row",
+                    zebra_stripes=True,
+                    id="jobs",
                 )
         yield Footer()
 
     def action_refresh(self):
-        table = self.query_one(DataTable)
+        self.refresh_job_table()
 
-        self.data = query_data(path)
+    @work(exclusive=True, group="query-job")
+    async def refresh_job_table(self) -> None:
+        data = await query(self.app.config.local_port, kind="job")
+
+        self.post_message(JobQueryResult(data=data))
+
+    @on(JobQueryResult)
+    def refresh_data(self, message: JobQueryResult) -> None:
+        self.data = message.data
+
+        table = self.query_one("DataTable#jobs")
+
         update_job_table(table, self.data)
+        table.loading = False
+        table.focus()
 
     def on_mount(self) -> None:
         table = self.query_one(DataTable)
         table.add_columns("id", "queue", "status", "name", "owner", "walltime")
-        table.focus()
 
-        self.action_refresh()
+        self.refresh_job_table()
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         table = self.query_one(DataTable)
@@ -182,6 +202,12 @@ def update_properties(table, data):
 
 
 def update_timestamps(table, data):
+    def parse_timestamp(timestamp):
+        if timestamp is None:
+            return "(missing)"
+
+        return dt.datetime.fromtimestamp(int(timestamp)).astimezone().isoformat()
+
     keys = [
         "ctime",
         "etime",
@@ -190,7 +216,7 @@ def update_timestamps(table, data):
         "mtime",
     ]
 
-    rows = [(job_translations.get(k, k), data.get(k, "(missing)")) for k in keys]
+    rows = [(job_translations.get(k, k), parse_timestamp(data.get(k))) for k in keys]
 
     table.add_rows(rows)
 
@@ -355,29 +381,29 @@ class JobDetailScreen(ModalScreen):
         }
         screen_cls = screens[event.button.id]
 
-        self.app.push_screen(screen_cls(self._data))
+        self.app.push_screen(screen_cls(self._data["attributes"]))
 
     def action_environment(self) -> None:
-        self.app.push_screen(EnvironmentScreen(self._data))
+        self.app.push_screen(EnvironmentScreen(self._data["attributes"]))
 
     def action_logs(self) -> None:
-        self.app.push_screen(LogScreen(self._data))
+        self.app.push_screen(LogScreen(self._data["attributes"]))
 
     def refresh_data(self) -> None:
         job_details = self.query_one("DataTable#details")
-        update_job_details(job_details, self._data)
+        update_job_details(job_details, self._data["attributes"])
 
         properties = self.query_one("DataTable#properties")
-        update_properties(properties, self._data)
+        update_properties(properties, self._data["attributes"])
 
         timestamps = self.query_one("DataTable#timestamps")
-        update_timestamps(timestamps, self._data)
+        update_timestamps(timestamps, self._data["attributes"])
 
         execution = self.query_one("DataTable#execution")
-        update_execution(execution, self._data)
+        update_execution(execution, self._data["attributes"])
 
         resources = self.query_one("DataTable#resources")
-        update_resources(resources, self._data)
+        update_resources(resources, self._data["attributes"])
 
     def on_mount(self) -> None:
         job_details = self.query_one("DataTable#details")
@@ -420,6 +446,7 @@ class EnvironmentScreen(ModalScreen):
         table.add_columns("name", "value")
 
         variables = self._data["variable_list"]
+
         rows = [(name, value) for name, value in variables.items()]
         table.add_rows(rows)
 
