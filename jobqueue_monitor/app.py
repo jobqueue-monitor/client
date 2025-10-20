@@ -1,4 +1,5 @@
 import asyncio
+import signal
 from dataclasses import dataclass
 
 import asyncssh
@@ -9,7 +10,15 @@ from textual.containers import Vertical
 from textual.message import Message
 from textual.widgets import DataTable, Footer, Header, Label
 
+from .query import shutdown
 from .screens import QueueDetailScreen, QueueScreen
+
+
+async def cleanup(local_port):
+    await shutdown(local_port)
+
+    for task in asyncio.all_tasks():
+        task.cancel()
 
 
 class SSHConnected(Message):
@@ -82,6 +91,14 @@ class JobqueueMonitor(App):
                 ("remote port", self.config.remote_port),
             ]
         )
+
+        def signal_handler():
+            return asyncio.create_task(cleanup(self.config.local_port))
+
+        loop = asyncio.get_running_loop()
+        loop.add_signal_handler(signal.SIGINT, signal_handler)
+        loop.add_signal_handler(signal.SIGTERM, signal_handler)
+
         connection = await asyncssh.connect(self.config.server)
 
         self.post_message(SSHConnected(connection=connection))
@@ -125,5 +142,6 @@ class JobqueueMonitor(App):
 
         self._connect()
 
-    def on_quit(self):
+    async def action_quit(self):
+        await cleanup(self.config.local_port)
         self._connection.close()
