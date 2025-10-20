@@ -1,0 +1,8 @@
+Vertical#welcome {
+   border: solid green;
+}
+
+.welcome {
+    align: center middle;
+    content-align: center middle;
+}
