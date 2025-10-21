@@ -1,6 +1,7 @@
 import asyncio
 import signal
 from dataclasses import dataclass
+from typing import Any
 
 import asyncssh
 from textual import on, work
@@ -8,6 +9,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
 from textual.message import Message
+from textual.reactive import reactive
 from textual.widgets import DataTable, Footer, Header, Label
 
 from .query import shutdown
@@ -52,8 +54,8 @@ class JobqueueMonitor(App):
 
     BINDINGS = [
         Binding("ctrl+c", "quit", "Quit", show=True, priority=True),
-        Binding("q", "push_screen('queue')", "Queue"),
-        Binding("j", "push_screen('job')", "Job"),
+        Binding("q", "show_queues", "Queues"),
+        Binding("j", "show_jobs", "Jobs"),
     ]
 
     SCREENS = {
@@ -62,6 +64,7 @@ class JobqueueMonitor(App):
         "job": JobScreen,
     }
     CSS_PATH = "jobqueue_monitor.tcss"
+    loading = reactive(False, bindings=True)
 
     def __init__(self, config: Config):
         self.config = config
@@ -134,19 +137,33 @@ class JobqueueMonitor(App):
             await asyncio.gather(proc.wait(), listener.wait_closed())
 
     @on(ServerStarted)
-    def enable_table(self):
-        welcome = self.query_one(Vertical)
-        welcome.loading = False
+    def enable_table(self) -> None:
+        self.loading = False
 
-    def on_mount(self):
+    def action_show_queues(self) -> None:
+        self.push_screen("queue")
+
+    def action_show_jobs(self) -> None:
+        self.push_screen("job")
+
+    def watch_loading(self, old_state: bool, new_state: bool) -> None:
+        welcome = self.query_one(Vertical)
+        welcome.loading = new_state
+
+    def check_action(self, action: str, parameters: tuple[Any, ...]) -> bool | None:
+        if self.loading and action in {"show_jobs", "show_queues"}:
+            return None
+
+        return True
+
+    def on_mount(self) -> None:
         server_table = self.query_one(DataTable)
         server_table.add_columns("name", "value")
 
-        welcome = self.query_one(Vertical)
-        welcome.loading = True
+        self.loading = True
 
         self._connect()
 
-    async def action_quit(self):
+    async def action_quit(self) -> None:
         await cleanup(self.config.local_port)
         self._connection.close()
