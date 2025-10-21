@@ -1,24 +1,26 @@
-import json
-import pathlib
 import re
 
+from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical
+from textual.message import Message
 from textual.screen import ModalScreen, Screen
 from textual.widgets import DataTable, Footer, Header, Input, Static
 
-from jobqueue_monitor.utils import natural_sort_key, translate_json
+from jobqueue_monitor.query import query
+from jobqueue_monitor.utils import natural_sort_key
 
-PATH = pathlib.Path(__file__).parent / "../../../dummy-server/qstat_queue.json"
 
+class QueueQueryResult(Message):
+    def __init__(self, data):
+        super().__init__()
 
-def query_data(path):
-    return translate_json(json.loads(path.read_text())["Queue"])
+        self.data = data
 
 
 def extract_row(id, data):
-    attrs = data
-    description = "(missing)"
+    attrs = data["attributes"]
+    description = data["description"] or "(missing)"
 
     return (id, attrs["queue_type"], attrs["total_jobs"], description)
 
@@ -58,21 +60,30 @@ class QueueScreen(Screen):
         yield Footer()
 
     def action_refresh(self):
+        self.refresh_queue_table()
+
+    @work(exclusive=True, group="query-queue", description="query the queues")
+    async def refresh_queue_table(self) -> None:
+        data = await query(self.app.config.local_port, kind="queue")
+
+        self.post_message(QueueQueryResult(data=data))
+
+    @on(QueueQueryResult)
+    def refresh_data(self, message: QueueQueryResult):
+        self.data = message.data
+
         table = self.query_one(DataTable)
-
-        self.refresh_data(table)
-
-    def refresh_data(self, table):
-        self.data = query_data(PATH)
-
         update_queue_table(table, self.data)
+        table.loading = False
+        table.focus()
 
     def on_mount(self) -> None:
         table = self.query_one(DataTable)
         table.add_columns("name", "type", "# jobs", "description")
+        table.loading = True
         table.focus()
 
-        self.refresh_data(table)
+        self.refresh_queue_table()
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         table = self.query_one(DataTable)
@@ -91,13 +102,12 @@ class QueueScreen(Screen):
         new_data = {
             key: value
             for key, value in self.data.items()
-            if expression_re.match(key) is not None
+            if any(expression_re.match(v) for v in extract_row(key, value))
         }
         update_queue_table(table, new_data)
 
     def on_input_submitted(self):
         table = self.query_one(DataTable)
-
         table.focus()
 
     def action_search(self):
@@ -105,7 +115,7 @@ class QueueScreen(Screen):
         input_widget.focus()
 
 
-def render_permissions_table(data, **kwargs):
+def update_permissions_table(table, data):
     def ensure_list(value):
         if value is None:
             return []
@@ -120,32 +130,24 @@ def render_permissions_table(data, **kwargs):
     users = ensure_list(data.get("acl_users"))
     enforced = bool(data.get("acl_user_enable", False))
 
-    table = DataTable(
-        name="Permissions",
-        zebra_stripes=True,
-        id="queue_permissions_table",
-        cursor_type="none",
-    )
-    table.add_columns("name", "value")
     rows = [
         ("enforced", enforced),
         ("users", ", ".join(users)),
     ]
+    table.clear(columns=False)
     table.add_rows(rows)
-    return table
 
 
-def render_settings_table(data, **kwargs):
+def update_settings_table(table, data):
     queue_info_keys = [
         "queue_type",
         "enabled",
         "started",
         "priority",
     ]
-    table = DataTable(name="Settings", **kwargs)
-    table.add_columns("name", "value")
+
+    table.clear(columns=False)
     table.add_rows([(k, data.get(k, "(unset)")) for k in queue_info_keys])
-    return table
 
 
 def preprocess_resource_table(data):
@@ -164,7 +166,7 @@ def preprocess_resource_table(data):
     }
 
 
-def render_resource_table(data, **kwargs):
+def update_resource_table(table, data):
     def preprocess_group_key(key):
         return key.removeprefix("resources").lstrip("_")
 
@@ -204,11 +206,9 @@ def render_resource_table(data, **kwargs):
         rows = []
         disabled = True
 
-    table = DataTable(disabled=disabled, **kwargs)
-    table.add_columns("resource", *[k.removeprefix("resources_") for k in group_names])
+    table.clear(columns=False)
     table.add_rows(rows)
-
-    return table
+    table.disabled = disabled
 
 
 def parse_state_count(string):
@@ -216,16 +216,13 @@ def parse_state_count(string):
     return {name.lower(): int(count) for name, count in parts}
 
 
-def render_job_summary(data, **kwargs):
+def update_job_summary(table, data):
     total = data["total_jobs"]
     state_count = parse_state_count(data["state_count"])
 
-    table = DataTable(**kwargs)
-    table.add_columns("kind", "count")
     rows = list(state_count.items()) + [("total", total)]
+    table.clear(columns=False)
     table.add_rows(rows)
-
-    return table
 
 
 class QueueDetailScreen(ModalScreen):
@@ -235,6 +232,7 @@ class QueueDetailScreen(ModalScreen):
 
     BINDINGS = [
         ("escape", "app.pop_screen", "Back"),
+        ("ctrl+g", "refresh", "Refresh"),
     ]
 
     def __init__(self, id, data):
@@ -263,11 +261,8 @@ class QueueDetailScreen(ModalScreen):
                         classes="heading",
                     )
 
-                    yield render_settings_table(
-                        self._data,
-                        zebra_stripes=True,
-                        id="queue_settings_table",
-                        cursor_type="none",
+                    yield DataTable(
+                        id="settings", zebra_stripes=True, cursor_type="none"
                     )
                 with Vertical(id="queue_permissions", classes="queue_details"):
                     yield Static(
@@ -276,10 +271,10 @@ class QueueDetailScreen(ModalScreen):
                         classes="heading",
                     )
 
-                    yield render_permissions_table(
-                        self._data,
+                    yield DataTable(
+                        name="Permissions",
+                        id="permissions",
                         zebra_stripes=True,
-                        id="queue_permissions_table",
                         cursor_type="none",
                     )
 
@@ -288,24 +283,55 @@ class QueueDetailScreen(ModalScreen):
                 "[i]Resources[/i]", id="queue_resource_heading", classes="heading"
             )
 
-            yield render_resource_table(
-                self._data,
-                name="resources",
-                zebra_stripes=True,
-                id="queue_resource_table",
-                cursor_type="none",
-            )
+            yield DataTable(id="resources", zebra_stripes=True, cursor_type="none")
 
         with Vertical(classes="queue_detail_container", id="queue_job_summary"):
             yield Static(
                 "[i]Job Summary[/i]", id="queue_job_summary_heading", classes="heading"
             )
 
-            yield render_job_summary(
-                self._data,
-                name="job_summary",
-                id="queue_job_summary_table",
-                cursor_type="none",
-            )
+            yield DataTable(id="job_summary", zebra_stripes=True, cursor_type="none")
 
         yield Footer()
+
+    def on_mount(self) -> None:
+        settings = self.query_one("DataTable#settings")
+        settings.add_columns("name", "value")
+        update_settings_table(settings, self._data["attributes"])
+
+        permissions = self.query_one("DataTable#permissions")
+        permissions.add_columns("name", "value")
+        update_permissions_table(permissions, self._data["attributes"])
+
+        resources = self.query_one("DataTable#resources")
+        resources.add_columns("resource", "assigned", "min", "max", "default")
+        update_resource_table(resources, self._data["attributes"])
+
+        job_summary = self.query_one("DataTable#job_summary")
+        job_summary.add_columns("kind", "count")
+        update_job_summary(job_summary, self._data["attributes"])
+
+    def action_refresh(self) -> None:
+        self.refresh_content()
+
+    @work(exclusive=True)
+    async def refresh_content(self) -> None:
+        data = await query(self.app.config.local_port, kind="queue")
+
+        self.post_message(QueueQueryResult(data=data))
+
+        self.data = data[self._queue_id]
+        self.refresh_data()
+
+    def refresh_data(self) -> None:
+        settings = self.query_one("DataTable#settings")
+        update_settings_table(settings, self._data["attributes"])
+
+        permissions = self.query_one("DataTable#permissions")
+        update_permissions_table(permissions, self._data["attributes"])
+
+        resources = self.query_one("DataTable#resources")
+        update_resource_table(resources, self._data["attributes"])
+
+        job_summary = self.query_one("DataTable#job_summary")
+        update_job_summary(job_summary, self._data["attributes"])

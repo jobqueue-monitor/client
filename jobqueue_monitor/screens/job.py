@@ -1,19 +1,22 @@
-import json
-import pathlib
+import datetime as dt
 import re
 
+from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal
+from textual.message import Message
 from textual.screen import ModalScreen, Screen
 from textual.widgets import Button, DataTable, Footer, Header, Input, Label
 
-from jobqueue_monitor.utils import natural_sort_key, translate_json
+from jobqueue_monitor.query import query
+from jobqueue_monitor.utils import natural_sort_key
 
-path = pathlib.Path(__file__).parent / "../../../dummy-server/qstat_job.json"
 
+class JobQueryResult(Message):
+    def __init__(self, data):
+        super().__init__()
 
-def query_data(path):
-    return translate_json(json.loads(path.read_text()))["Jobs"]
+        self.data = data
 
 
 job_states = {
@@ -32,26 +35,16 @@ job_states = {
 }
 
 
-def deep_match(expr, value):
-    match value:
-        case dict() as obj:
-            return any(deep_match(expr, v) for v in obj.values())
-        case list() as obj:
-            return any(deep_match(expr, v) for v in obj)
-        case str() as obj:
-            return expr.match(obj) is not None
-        case _ as obj:
-            return expr.match(str(obj)) is not None
+def extract_row(id, data):
+    attrs = {k.lower(): v for k, v in data["attributes"].items()}
 
-
-def extract_row(id, attrs):
     job_state = attrs["job_state"]
     return (
         id,
         attrs["queue"],
         job_states.get(job_state, job_state),
-        attrs["Job_Name"],
-        attrs["Job_Owner"],
+        attrs["job_name"],
+        attrs["job_owner"],
         attrs.get("resources_used", {}).get("walltime", "(not running)"),
     )
 
@@ -87,22 +80,39 @@ class JobScreen(Screen):
 
             with Container():
                 yield DataTable(
-                    classes="jobs_table", cursor_type="row", zebra_stripes=True
+                    classes="jobs_table",
+                    cursor_type="row",
+                    zebra_stripes=True,
+                    id="jobs",
                 )
         yield Footer()
 
     def action_refresh(self):
-        table = self.query_one(DataTable)
+        self.refresh_job_table()
 
-        self.data = query_data(path)
+    @work(exclusive=True, group="query-job")
+    async def refresh_job_table(self) -> None:
+        data = await query(self.app.config.local_port, kind="job")
+
+        self.post_message(JobQueryResult(data=data))
+
+    @on(JobQueryResult)
+    def refresh_data(self, message: JobQueryResult) -> None:
+        self.data = message.data
+
+        table = self.query_one("DataTable#jobs")
+
         update_job_table(table, self.data)
-
-    def on_mount(self) -> None:
-        table = self.query_one(DataTable)
-        table.add_columns("id", "queue", "status", "name", "owner", "walltime")
+        table.loading = False
         table.focus()
 
-        self.action_refresh()
+    def on_mount(self) -> None:
+        self.data = {}
+
+        table = self.query_one(DataTable)
+        table.add_columns("id", "queue", "status", "name", "owner", "walltime")
+
+        self.refresh_job_table()
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         table = self.query_one(DataTable)
@@ -121,7 +131,7 @@ class JobScreen(Screen):
         new_data = {
             key: value
             for key, value in self.data.items()
-            if expression_re.match(key) is not None or deep_match(expression_re, value)
+            if any(expression_re.match(v) is not None for v in extract_row(key, value))
         }
         update_job_table(table, new_data)
 
@@ -159,6 +169,7 @@ def update_job_details(table, data):
 
     rows = [(k, data.get(k, "(missing)")) for k in keys]
 
+    table.clear(columns=False)
     table.add_rows(rows)
 
 
@@ -178,10 +189,17 @@ def update_properties(table, data):
 
     rows = [(k, data.get(k, "(missing)")) for k in keys]
 
+    table.clear(columns=False)
     table.add_rows(rows)
 
 
 def update_timestamps(table, data):
+    def parse_timestamp(timestamp):
+        if timestamp is None:
+            return "(missing)"
+
+        return dt.datetime.fromtimestamp(int(timestamp)).astimezone().isoformat()
+
     keys = [
         "ctime",
         "etime",
@@ -190,8 +208,9 @@ def update_timestamps(table, data):
         "mtime",
     ]
 
-    rows = [(job_translations.get(k, k), data.get(k, "(missing)")) for k in keys]
+    rows = [(job_translations.get(k, k), parse_timestamp(data.get(k))) for k in keys]
 
+    table.clear(columns=False)
     table.add_rows(rows)
 
 
@@ -215,6 +234,7 @@ def update_execution(table, data):
 
     rows = [translator.get(k, identity)(k, data.get(k, "(missing)")) for k in keys]
 
+    table.clear(columns=False)
     table.add_rows(rows)
 
 
@@ -263,28 +283,43 @@ def update_resources(table, data):
     rows = [
         (resource,) + tuple(group.values()) for resource, group in translated.items()
     ]
+    table.clear(columns=False)
     table.add_rows(rows)
 
 
 class JobDetailScreen(ModalScreen):
     BINDINGS = [
         ("escape", "app.pop_screen", "Back"),
-        ("g", "refresh", "Refresh"),
+        ("ctrl+g", "refresh", "Refresh"),
         ("e", "environment", "Environment"),
         ("l", "logs", "Logs"),
     ]
     CSS_PATH = "job_details.tcss"
 
     def __init__(self, id, data):
+        self._job_id = id
+        self.data = data
+
+        super().__init__()
+
+    @property
+    def data(self):
+        return self._data
+
+    @data.setter
+    def data(self, new):
         translations = {
             "rerunable": "rerunnable",
         }
-        self._job_id = id
-        self._data = {
-            translations.get(k.lower(), k.lower()): v for k, v in data.items()
+
+        data = dict(new)
+
+        data["attributes"] = {
+            translations.get(k.lower(), k.lower()): v
+            for k, v in data.get("attributes", {}).items()
         }
 
-        super().__init__()
+        self._data = data
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -355,29 +390,42 @@ class JobDetailScreen(ModalScreen):
         }
         screen_cls = screens[event.button.id]
 
-        self.app.push_screen(screen_cls(self._data))
+        self.app.push_screen(screen_cls(self.data["attributes"]))
 
     def action_environment(self) -> None:
-        self.app.push_screen(EnvironmentScreen(self._data))
+        self.app.push_screen(EnvironmentScreen(self.data["attributes"]))
 
     def action_logs(self) -> None:
-        self.app.push_screen(LogScreen(self._data))
+        self.app.push_screen(LogScreen(self._data["attributes"]))
+
+    def action_refresh(self) -> None:
+        self.refresh_content()
+
+    @work(exclusive=True)
+    async def refresh_content(self) -> None:
+        data = await query(self.app.config.local_port, kind="job")
+
+        self.post_message(JobQueryResult(data=data))
+
+        self.data = data[self._job_id]
+
+        self.refresh_data()
 
     def refresh_data(self) -> None:
         job_details = self.query_one("DataTable#details")
-        update_job_details(job_details, self._data)
+        update_job_details(job_details, self.data["attributes"])
 
         properties = self.query_one("DataTable#properties")
-        update_properties(properties, self._data)
+        update_properties(properties, self.data["attributes"])
 
         timestamps = self.query_one("DataTable#timestamps")
-        update_timestamps(timestamps, self._data)
+        update_timestamps(timestamps, self.data["attributes"])
 
         execution = self.query_one("DataTable#execution")
-        update_execution(execution, self._data)
+        update_execution(execution, self.data["attributes"])
 
         resources = self.query_one("DataTable#resources")
-        update_resources(resources, self._data)
+        update_resources(resources, self.data["attributes"])
 
     def on_mount(self) -> None:
         job_details = self.query_one("DataTable#details")
@@ -420,6 +468,7 @@ class EnvironmentScreen(ModalScreen):
         table.add_columns("name", "value")
 
         variables = self._data["variable_list"]
+
         rows = [(name, value) for name, value in variables.items()]
         table.add_rows(rows)
 
