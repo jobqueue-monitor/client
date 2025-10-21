@@ -64,10 +64,7 @@ class QueueScreen(Screen):
 
     @work(exclusive=True, group="query-queue", description="query the queues")
     async def refresh_queue_table(self) -> None:
-        from textual.app import App
-
-        app = self.query_ancestor(App)
-        data = await query(app.config.local_port, kind="queue")
+        data = await query(self.app.config.local_port, kind="queue")
 
         self.post_message(QueueQueryResult(data=data))
 
