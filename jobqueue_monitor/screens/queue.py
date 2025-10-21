@@ -105,7 +105,7 @@ class QueueScreen(Screen):
         new_data = {
             key: value
             for key, value in self.data.items()
-            if expression_re.match(key) is not None
+            if any(expression_re.match(v) for v in extract_row(key, value))
         }
         update_queue_table(table, new_data)
 

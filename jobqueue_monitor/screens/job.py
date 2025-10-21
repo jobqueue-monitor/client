@@ -35,18 +35,6 @@ job_states = {
 }
 
 
-def deep_match(expr, value):
-    match value:
-        case dict() as obj:
-            return any(deep_match(expr, v) for v in obj.values())
-        case list() as obj:
-            return any(deep_match(expr, v) for v in obj)
-        case str() as obj:
-            return expr.match(obj) is not None
-        case _ as obj:
-            return expr.match(str(obj)) is not None
-
-
 def extract_row(id, data):
     attrs = {k.lower(): v for k, v in data["attributes"].items()}
 
@@ -141,7 +129,7 @@ class JobScreen(Screen):
         new_data = {
             key: value
             for key, value in self.data.items()
-            if expression_re.match(key) is not None or deep_match(expression_re, value)
+            if any(expression_re.match(v) is not None for v in extract_row(key, value))
         }
         update_job_table(table, new_data)
 
