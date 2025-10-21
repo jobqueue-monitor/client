@@ -290,7 +290,7 @@ def update_resources(table, data):
 class JobDetailScreen(ModalScreen):
     BINDINGS = [
         ("escape", "app.pop_screen", "Back"),
-        ("g", "refresh", "Refresh"),
+        ("ctrl+g", "refresh", "Refresh"),
         ("e", "environment", "Environment"),
         ("l", "logs", "Logs"),
     ]
