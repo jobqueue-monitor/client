@@ -107,6 +107,8 @@ class JobScreen(Screen):
         table.focus()
 
     def on_mount(self) -> None:
+        self.data = {}
+
         table = self.query_one(DataTable)
         table.add_columns("id", "queue", "status", "name", "owner", "walltime")
 
@@ -167,6 +169,7 @@ def update_job_details(table, data):
 
     rows = [(k, data.get(k, "(missing)")) for k in keys]
 
+    table.clear(columns=False)
     table.add_rows(rows)
 
 
@@ -186,6 +189,7 @@ def update_properties(table, data):
 
     rows = [(k, data.get(k, "(missing)")) for k in keys]
 
+    table.clear(columns=False)
     table.add_rows(rows)
 
 
@@ -206,6 +210,7 @@ def update_timestamps(table, data):
 
     rows = [(job_translations.get(k, k), parse_timestamp(data.get(k))) for k in keys]
 
+    table.clear(columns=False)
     table.add_rows(rows)
 
 
@@ -229,6 +234,7 @@ def update_execution(table, data):
 
     rows = [translator.get(k, identity)(k, data.get(k, "(missing)")) for k in keys]
 
+    table.clear(columns=False)
     table.add_rows(rows)
 
 
@@ -277,6 +283,7 @@ def update_resources(table, data):
     rows = [
         (resource,) + tuple(group.values()) for resource, group in translated.items()
     ]
+    table.clear(columns=False)
     table.add_rows(rows)
 
 
@@ -290,15 +297,29 @@ class JobDetailScreen(ModalScreen):
     CSS_PATH = "job_details.tcss"
 
     def __init__(self, id, data):
+        self._job_id = id
+        self.data = data
+
+        super().__init__()
+
+    @property
+    def data(self):
+        return self._data
+
+    @data.setter
+    def data(self, new):
         translations = {
             "rerunable": "rerunnable",
         }
-        self._job_id = id
-        self._data = {
-            translations.get(k.lower(), k.lower()): v for k, v in data.items()
+
+        data = dict(new)
+
+        data["attributes"] = {
+            translations.get(k.lower(), k.lower()): v
+            for k, v in data.get("attributes", {}).items()
         }
 
-        super().__init__()
+        self._data = data
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -369,29 +390,42 @@ class JobDetailScreen(ModalScreen):
         }
         screen_cls = screens[event.button.id]
 
-        self.app.push_screen(screen_cls(self._data["attributes"]))
+        self.app.push_screen(screen_cls(self.data["attributes"]))
 
     def action_environment(self) -> None:
-        self.app.push_screen(EnvironmentScreen(self._data["attributes"]))
+        self.app.push_screen(EnvironmentScreen(self.data["attributes"]))
 
     def action_logs(self) -> None:
         self.app.push_screen(LogScreen(self._data["attributes"]))
 
+    def action_refresh(self) -> None:
+        self.refresh_content()
+
+    @work(exclusive=True)
+    async def refresh_content(self) -> None:
+        data = await query(self.app.config.local_port, kind="job")
+
+        self.post_message(JobQueryResult(data=data))
+
+        self.data = data[self._job_id]
+
+        self.refresh_data()
+
     def refresh_data(self) -> None:
         job_details = self.query_one("DataTable#details")
-        update_job_details(job_details, self._data["attributes"])
+        update_job_details(job_details, self.data["attributes"])
 
         properties = self.query_one("DataTable#properties")
-        update_properties(properties, self._data["attributes"])
+        update_properties(properties, self.data["attributes"])
 
         timestamps = self.query_one("DataTable#timestamps")
-        update_timestamps(timestamps, self._data["attributes"])
+        update_timestamps(timestamps, self.data["attributes"])
 
         execution = self.query_one("DataTable#execution")
-        update_execution(execution, self._data["attributes"])
+        update_execution(execution, self.data["attributes"])
 
         resources = self.query_one("DataTable#resources")
-        update_resources(resources, self._data["attributes"])
+        update_resources(resources, self.data["attributes"])
 
     def on_mount(self) -> None:
         job_details = self.query_one("DataTable#details")
